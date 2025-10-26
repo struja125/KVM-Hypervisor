@@ -33,10 +33,10 @@ run:
 	./kvm_zadatak3 --memory 4 --page 2 --guest guest.img   --file output.txt
 
 testa: 
-	$(CC) $(GUEST_CFLAGS) -c -o guestCitanje.o guestCitanje.c
-	$(LD) -T guest.ld guestCitanje.o -o guestCitanje.img
-	$(CC) $(CFLAGS) kvm_zadatak3.c -o kvm_zadatak3
-	./kvm_zadatak3 --memory 4 --page 2 --guest guestCitanje.img   --file output.txt
+	$(CC) $(GUEST_CFLAGS) -c -o guestReadOnly.o guestReadOnly.c
+	$(LD) -T guest.ld guestReadOnly.o -o guestReadOnly.img
+	$(CC) $(CFLAGS) kvm_zadatak3.c -o kvm_zadatak3 			
+	./kvm_zadatak3 --memory 4 --page 2 --guest guestReadOnly.img   --file output.txt
 testb: 
 	$(CC) $(GUEST_CFLAGS) -c -o guestPisanje.o guestPisanje.c
 	$(LD) -T guest.ld guestPisanje.o -o guestPisanje.img
@@ -47,6 +47,8 @@ testc:
 	$(LD) -T guest.ld guestPisanje.o -o guestPisanje.img
 	$(CC) $(CFLAGS) kvm_zadatak3.c -o kvm_zadatak3 			
 	./kvm_zadatak3 --memory 4 --page 2 --guest guestPisanje.img guestPisanje.img guestPisanje.img guestPisanje.img --file output.txt
+
+	
 # ===== Clean ===== make testc
 clean:
 	rm -f mini_hypervisor *.o *.img

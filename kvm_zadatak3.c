@@ -34,6 +34,7 @@
 #define FILE_CLOSE 2
 #define FILE_READ  3
 #define FILE_WRITE 4
+#define FILE_OPEN_READONLY 5
 
 struct vm {
 	int kvm_fd;
@@ -352,6 +353,25 @@ int open_file(FileContext *ctx, const char *path, const char *mode)
     return guest_fd;
 }
 
+int open_file_READONLY(FileContext *ctx, const char *path)
+{
+    FILE *f = fopen(path, "r+");
+    if (!f) {
+        perror("fopen");
+        return -1;
+    }
+	
+	lseek(fileno(f), 0, SEEK_SET);
+    int guest_fd = ctx->fd_count + 3; // first guest FD is 3
+    ctx->fds[ctx->fd_count].guest_fd = guest_fd;
+    ctx->fds[ctx->fd_count].host_fd = fileno(f);
+    strcpy(ctx->fds[ctx->fd_count].path, path);
+    ctx->fds[ctx->fd_count].shared_copy = true;
+    ctx->fd_count++;
+    printf("[VM%d] OPEN %s -> fd=%d\n", ctx->vm_id, path, guest_fd);
+    return guest_fd;
+}
+
 
 // Parse/handle accumulated IO buffer for FileContext
 static void try_process_io_buffer(FileContext *ctx)
@@ -371,6 +391,28 @@ static void try_process_io_buffer(FileContext *ctx)
 			memcpy(path, ctx->io_buf, copy_len);
 			path[copy_len] = 0;
 			int fd = open_file(ctx, path, "r+");
+			
+			ctx->output = (fd >= 0) ? fd : 0xFF; // Store fd in output for guest to read
+			// remove consumed bytes (path + null)
+			int consume = found + 1;
+			memmove(ctx->io_buf, ctx->io_buf + consume, ctx->io_buf_len - consume);
+			ctx->io_buf_len -= consume;
+			ctx->pending_op = 0;
+			continue;
+		}
+		else if (ctx->pending_op == FILE_OPEN_READONLY) {
+			// look for null terminator
+			int found = -1;
+			for (int i = 0; i < ctx->io_buf_len; i++) {
+				if (ctx->io_buf[i] == 0) { found = i; break; }
+			}
+			if (found == -1) return; // wait for more bytes
+			// we have full path
+			char path[256];
+			int copy_len = (found < 255) ? found : 255;
+			memcpy(path, ctx->io_buf, copy_len);
+			path[copy_len] = 0;
+			int fd = open_file_READONLY(ctx, path);
 			
 			ctx->output = (fd >= 0) ? fd : 0xFF; // Store fd in output for guest to read
 			// remove consumed bytes (path + null)
