@@ -92,8 +92,16 @@ _start(void)
     
   
 
-    for(int i = 0; i < 15; i++) {
+   /*  for(int i = 0; i < 15; i++) {
         uint8_t read_byte = file_read(fd);
+        outb(SERIAL_PORT, read_byte);
+    } */
+
+    while(1){
+      
+
+        uint8_t read_byte = file_read(fd);
+        if(read_byte == 0) break;
         outb(SERIAL_PORT, read_byte);
     }
 
