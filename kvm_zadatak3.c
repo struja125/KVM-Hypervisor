@@ -1,4 +1,4 @@
-// (cela datoteka — zameni svoj kvm_zadatak3.c ovim sadržajem)
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -28,7 +28,7 @@
 #define EFER_LME (1u << 8)
 #define EFER_LMA (1u << 10)
 
-// File I/O port protocol
+
 #define FILE_PORT 0x0278
 #define FILE_OPEN  1
 #define FILE_CLOSE 2
@@ -60,9 +60,9 @@ typedef struct {
 	int shared_count;
 	int vm_id;
 
-	// IO accumulate state
-	uint8_t pending_op;       // 0 == none, otherwise FILE_*
-	uint8_t io_buf[4096];     // accumulator for incoming bytes for current op
+	
+	uint8_t pending_op;       
+	uint8_t io_buf[4096];     
 	int io_buf_len;
 
 	uint8_t output;
@@ -209,8 +209,8 @@ static void setup_long_mode(struct vm *v, struct kvm_sregs *sregs, bool cetriKB)
 	}
 	else
 	{
-		// 2MB pages
-		pd[0] = PDE64_PRESENT | PDE64_RW | PDE64_USER | PDE64_PS | 0; // maps first 2MB
+		
+		pd[0] = PDE64_PRESENT | PDE64_RW | PDE64_USER | PDE64_PS | 0; 
 	}
 
 	sregs->cr3  = pml4_addr;
@@ -264,7 +264,7 @@ int load_guest_image(struct vm *v, const char *image_path, uint64_t load_addr) {
     return 0;
 }
 
-// File utilities
+
 
 bool is_shared(FileContext *ctx, const char *path) {
 	for (int i = 0; i < ctx->shared_count; i++) {
@@ -285,7 +285,7 @@ void remove_fd(FileContext *ctx, int guest_fd) {
 	for (int i = 0; i < ctx->fd_count; i++) {
 		if (ctx->fds[i].guest_fd == guest_fd) {
 			if (ctx->fds[i].host_fd >= 0) close(ctx->fds[i].host_fd);
-			// shift remaining
+			
 			for (int j = i; j < ctx->fd_count - 1; j++)
 				ctx->fds[j] = ctx->fds[j+1];
 			ctx->fd_count--;
@@ -300,7 +300,7 @@ int open_file(FileContext *ctx, const char *path, const char *mode)
     strcpy(local_path, path);
     bool shared = is_shared(ctx, path);
 
-    // If shared and opening for writing -> create per-VM local copy name
+    
     if (shared && (strchr(mode, 'w') || strchr(mode, '+'))) {
         const char *basename = strrchr(path, '/');
         if (basename) basename++;
@@ -309,9 +309,9 @@ int open_file(FileContext *ctx, const char *path, const char *mode)
                  "vm%d_%s", ctx->vm_id, basename);
         printf("[VM%d] Creating local copy  %s\n", ctx->vm_id, local_path);
         
-        // Copy content from original file to local copy
+        
         FILE *src = fopen(path, "r+");
-        if (src && access(local_path, F_OK) != 0) { // only if local copy doesn't exist
+        if (src && access(local_path, F_OK) != 0) { 
             FILE *dst = fopen(local_path, "w");
             if (dst) {
                 char buffer[4096];
@@ -324,12 +324,12 @@ int open_file(FileContext *ctx, const char *path, const char *mode)
             fclose(src);
         }
          
-        // override mode to r+ so it opens the copy for reading and writing
+        
         
     }
 
 	if(access(local_path, F_OK) != 0 ) {
-		// Create the file if it doesn't exist
+		
 		FILE *new_file = fopen(local_path, "w");
 		if (new_file) {
 			fclose(new_file);
@@ -343,7 +343,7 @@ int open_file(FileContext *ctx, const char *path, const char *mode)
     }
 	
 	lseek(fileno(f), 0, SEEK_SET);
-    int guest_fd = ctx->fd_count + 3; // first guest FD is 3
+    int guest_fd = ctx->fd_count + 3; 
     ctx->fds[ctx->fd_count].guest_fd = guest_fd;
     ctx->fds[ctx->fd_count].host_fd = fileno(f);
     strcpy(ctx->fds[ctx->fd_count].path, local_path);
@@ -362,7 +362,7 @@ int open_file_READONLY(FileContext *ctx, const char *path)
     }
 	
 	lseek(fileno(f), 0, SEEK_SET);
-    int guest_fd = ctx->fd_count + 3; // first guest FD is 3
+    int guest_fd = ctx->fd_count + 3; 
     ctx->fds[ctx->fd_count].guest_fd = guest_fd;
     ctx->fds[ctx->fd_count].host_fd = fileno(f);
     strcpy(ctx->fds[ctx->fd_count].path, path);
@@ -373,27 +373,27 @@ int open_file_READONLY(FileContext *ctx, const char *path)
 }
 
 
-// Parse/handle accumulated IO buffer for FileContext
+
 static void try_process_io_buffer(FileContext *ctx)
 {
-	// parser works on ctx->io_buf[0..io_buf_len-1]
+	
 	while (ctx->io_buf_len > 0) {
 		if (ctx->pending_op == FILE_OPEN) {
-			// look for null terminator
+			
 			int found = -1;
 			for (int i = 0; i < ctx->io_buf_len; i++) {
 				if (ctx->io_buf[i] == 0) { found = i; break; }
 			}
-			if (found == -1) return; // wait for more bytes
-			// we have full path
+			if (found == -1) return; 
+			
 			char path[256];
 			int copy_len = (found < 255) ? found : 255;
 			memcpy(path, ctx->io_buf, copy_len);
 			path[copy_len] = 0;
 			int fd = open_file(ctx, path, "r+");
 			
-			ctx->output = (fd >= 0) ? fd : 0xFF; // Store fd in output for guest to read
-			// remove consumed bytes (path + null)
+			ctx->output = (fd >= 0) ? fd : 0xFF; 
+			
 			int consume = found + 1;
 			memmove(ctx->io_buf, ctx->io_buf + consume, ctx->io_buf_len - consume);
 			ctx->io_buf_len -= consume;
@@ -401,21 +401,21 @@ static void try_process_io_buffer(FileContext *ctx)
 			continue;
 		}
 		else if (ctx->pending_op == FILE_OPEN_READONLY) {
-			// look for null terminator
+			
 			int found = -1;
 			for (int i = 0; i < ctx->io_buf_len; i++) {
 				if (ctx->io_buf[i] == 0) { found = i; break; }
 			}
-			if (found == -1) return; // wait for more bytes
-			// we have full path
+			if (found == -1) return; 
+			
 			char path[256];
 			int copy_len = (found < 255) ? found : 255;
 			memcpy(path, ctx->io_buf, copy_len);
 			path[copy_len] = 0;
 			int fd = open_file_READONLY(ctx, path);
 			
-			ctx->output = (fd >= 0) ? fd : 0xFF; // Store fd in output for guest to read
-			// remove consumed bytes (path + null)
+			ctx->output = (fd >= 0) ? fd : 0xFF; 
+			
 			int consume = found + 1;
 			memmove(ctx->io_buf, ctx->io_buf + consume, ctx->io_buf_len - consume);
 			ctx->io_buf_len -= consume;
@@ -423,42 +423,42 @@ static void try_process_io_buffer(FileContext *ctx)
 			continue;
 		}
 		else if (ctx->pending_op == FILE_CLOSE) {
-			// need 4 bytes (int)
+			
 			if (ctx->io_buf_len < 4) return;
 			int guest_fd;
 			memcpy(&guest_fd, ctx->io_buf, 4);
 			remove_fd(ctx, guest_fd);
 			printf("[VM%d] CLOSE fd=%d\n", ctx->vm_id, guest_fd);
-			// remove consumed
+			
 			memmove(ctx->io_buf, ctx->io_buf + 4, ctx->io_buf_len - 4);
 			ctx->io_buf_len -= 4;
 			ctx->pending_op = 0;
 			continue;
 		}
 		else if (ctx->pending_op == FILE_WRITE) {
-			// need header: guest_fd (4) + len (4)
+			
 			if (ctx->io_buf_len < 8) return;
 			int guest_fd;
 			int len;
 			memcpy(&guest_fd, ctx->io_buf, 4);
 			memcpy(&len, ctx->io_buf + 4, 4);
-			if (len < 0 || len > 2000000) { // sanity
+			if (len < 0 || len > 2000000) { 
 				fprintf(stderr, "[VM%d] Invalid write len=%d\n", ctx->vm_id, len);
-				// abort op
+				
 				ctx->io_buf_len = 0;
 				ctx->pending_op = 0;
 				return;
 			}
-			if (ctx->io_buf_len < 8 + len) return; // wait for data
+			if (ctx->io_buf_len < 8 + len) return; 
 			int host_fd = get_host_fd(ctx, guest_fd);
 			if (host_fd >= 0) {
-				// Seek to end of file before writing (append)
+				
 				lseek(host_fd, 0, SEEK_END);
 				ssize_t wrote = write(host_fd, ctx->io_buf + 8, len);
 				(void)wrote;
 			}
 			printf("[VM%d] WRITE fd=%d (%d bytes)\n", ctx->vm_id, guest_fd, len);
-			// consume
+			
 			int consume = 8 + len;
 			memmove(ctx->io_buf, ctx->io_buf + consume, ctx->io_buf_len - consume);
 			ctx->io_buf_len -= consume;
@@ -466,15 +466,15 @@ static void try_process_io_buffer(FileContext *ctx)
 			continue;
 		}
 		else if (ctx->pending_op == FILE_READ) {
-			// need header guest_fd (4) only - reading 1 byte at a time
+			
 			if (ctx->io_buf_len < 4) return;
 			
 			int guest_fd;
 			memcpy(&guest_fd, ctx->io_buf, 4);
 			int host_fd = get_host_fd(ctx, guest_fd);
 			if (host_fd >= 0) {
-				// Seek to beginning of file before reading
-				//lseek(host_fd, 0, SEEK_SET);
+				
+				
 				char byte;
 				int r = read(host_fd, &byte, 1);
 				if (r == 1) {
@@ -488,14 +488,14 @@ static void try_process_io_buffer(FileContext *ctx)
 				ctx->output = 0;
 				printf("[VM%d] READ fd=%d -> invalid fd\n", ctx->vm_id, guest_fd);
 			}
-			// consume header
+			
 			memmove(ctx->io_buf, ctx->io_buf + 4, ctx->io_buf_len - 4);
 			ctx->io_buf_len -= 4;
 			ctx->pending_op = 0;
 			continue;
 		}
 		else {
-			// no pending op but buffer has data - shouldn't happen, reset
+			
 			ctx->io_buf_len = 0;
 			ctx->pending_op = 0;
 			return;
@@ -503,7 +503,7 @@ static void try_process_io_buffer(FileContext *ctx)
 	}
 }
 
-// VM thread function
+
 void* glavnaFunkcija(void* args)
 {
 	argumenti* myArgs = (argumenti*) args;
@@ -549,7 +549,7 @@ void* glavnaFunkcija(void* args)
 	memset(&regs, 0, sizeof(regs));
 	regs.rflags = 0x2;
 	regs.rip = 0;
-	regs.rsp = (2ull << 20); // 2 MB stack
+	regs.rsp = (2ull << 20); 
 	if (ioctl(v.vcpu_fd, KVM_SET_REGS, &regs) < 0) {
 		perror("KVM_SET_REGS");
 		vm_destroy(&v);
@@ -557,7 +557,7 @@ void* glavnaFunkcija(void* args)
 		return NULL;
 	}
 
-	free(myArgs); // no longer needed
+	free(myArgs); 
 
 	while(!stop) {
 		ret = ioctl(v.vcpu_fd, KVM_RUN, 0);
@@ -571,7 +571,7 @@ void* glavnaFunkcija(void* args)
 				uint8_t *p = (uint8_t *)v.run + v.run->io.data_offset;
 				int bytes = v.run->io.size * v.run->io.count;
 
-				// Serial output (port 0xE9)
+				
 				if (v.run->io.direction == KVM_EXIT_IO_OUT &&
 				    v.run->io.port == 0xE9) {
 					for (int i = 0; i < bytes; i++) {
@@ -583,18 +583,18 @@ void* glavnaFunkcija(void* args)
 				if (v.run->io.direction == KVM_EXIT_IO_IN && v.run->io.port == 0x0278) {
   					*((char*)v.run + v.run->io.data_offset) = file_ctx.output;
 				}
-				// File protocol on FILE_PORT
+				
 				if (v.run->io.direction == KVM_EXIT_IO_OUT &&
 				    v.run->io.port == FILE_PORT) {
-					// append data to file_ctx buffer or process op byte
+					
 					int idx = 0;
 					while (idx < bytes) {
 						if (file_ctx.pending_op == 0) {
-							// first byte is op
+							
 							file_ctx.pending_op = p[idx++];
-							file_ctx.io_buf_len = 0; // reset accumulator
+							file_ctx.io_buf_len = 0; 
 						}
-						// append remaining bytes to buffer
+						
 						int tocopy = bytes - idx;
 						if (tocopy > (int)sizeof(file_ctx.io_buf) - file_ctx.io_buf_len)
 							tocopy = (int)sizeof(file_ctx.io_buf) - file_ctx.io_buf_len;
@@ -603,7 +603,7 @@ void* glavnaFunkcija(void* args)
 							file_ctx.io_buf_len += tocopy;
 							idx += tocopy;
 						}
-						// try to process (may consume part or all of buffer)
+						
 						try_process_io_buffer(&file_ctx);
 					}
 					continue;
@@ -663,7 +663,7 @@ int main(int argc, char *argv[])
 				cetriKB = (page_size_kb == 4);
 				break;
 			case 'g':
-				// gather one or more guest filenames
+				
 				guests[guest_count++] = optarg;
 				while (optind < argc && argv[optind][0] != '-') {
 					guests[guest_count++] = argv[optind++];
